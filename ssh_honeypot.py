@@ -49,7 +49,7 @@ def emulated_shell(channel, clientip):
                 response = b'\n' + b'Go To deeboodah.com' + b'\r\n'
             else:
                 response = b'\n' + bytes(command.strip()) + b'\r\n'
-                
+
             channel.send(response)
             channel.send(b'corporate-jumpbox2$ ')
             command = b""
@@ -70,6 +70,7 @@ class Server(paramiko.ServerInterface):
         return "password"
     
     def check_auth_password(self, username: str, password: str):
+        funnel_logger.info('Client {self.client_ip} attempted connection with username: {username} and password: {password}')
         if self.input_username is not None and self.input_password is not None:
             if username == self.input_username and password == self.input_password  :
                 return paramiko.AUTH_SUCCESSFUL
