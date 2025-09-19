@@ -14,13 +14,13 @@ host_key = paramiko.RSAKey(filename='server.key')
 funnel_logger = logging.getLogger("FunnelLogger")
 funnel_logger.setLevel(logging.INFO)
 funnel_handler = RotatingFileHandler("audits.log", maxBytes=2000, backupCount=5)
-funnel_handler.setFormatter(logging_format)
+funnel_handler.setFormatter(logging.Formatter(logging_format))
 funnel_logger.addHandler(funnel_handler)
 
 creds_logger = logging.getLogger("CredsLogger")
 creds_logger.setLevel(logging.INFO)
 creds_handler = RotatingFileHandler("cmd_audits.log", maxBytes=2000, backupCount=5)
-creds_handler.setFormatter(logging_format)
+creds_handler.setFormatter(logging.Formatter(logging_format))
 creds_logger.addHandler(creds_handler)
 
 # Emulated Shell
@@ -41,14 +41,19 @@ def emulated_shell(channel, clientip):
                 channel.close()
             elif command.strip() == b"pwd":
                 response = b'\n' + b'\\usr\\local' + b'\r\n'
+                creds_logger.info(f'Command {command.strip()} executed by {clientip}')
             elif command.strip() == b"whoami":
                 response = b'\n' + b'corpuser1' + b'\r\n'
+                creds_logger.info(f'Command {command.strip()} executed by {clientip}')
             elif command.strip() == b"ls":
                 response = b'\n' + b'jumpbox1.conf' + b'\r\n'
+                creds_logger.info(f'Command {command.strip()} executed by {clientip}')
             elif command.strip() == b"cat jumpbox1.conf":
                 response = b'\n' + b'Go To deeboodah.com' + b'\r\n'
+                creds_logger.info(f'Command {command.strip()} executed by {clientip}')
             else:
                 response = b'\n' + bytes(command.strip()) + b'\r\n'
+                creds_logger.info(f'Command {command.strip()} executed by {clientip}')
 
             channel.send(response)
             channel.send(b'corporate-jumpbox2$ ')
@@ -66,11 +71,12 @@ class Server(paramiko.ServerInterface):
         if kind == "session":
             return paramiko.OPEN_SUCCEEDED
     
-    def get_allowed_auths(self):
+    def get_allowed_auths(self, username):
         return "password"
     
     def check_auth_password(self, username: str, password: str):
-        funnel_logger.info('Client {self.client_ip} attempted connection with username: {username} and password: {password}')
+        funnel_logger.info(f'Client {self.client_ip} attempted connection with username: {username} and password: {password}')
+        creds_logger.info(f'{self.client_ip}, {username}, {password}')
         if self.input_username is not None and self.input_password is not None:
             if username == self.input_username and password == self.input_password  :
                 return paramiko.AUTH_SUCCESSFUL
@@ -108,7 +114,7 @@ def client_handle(client, addr, username, password):
             print("No channel was opened.")
         standard_banner = "Welcome to uBUNTU-22-04 ETS (Jemmy Jellyfish)!\r\n\r\n"
         channel.send(standard_banner)
-        emulated_shell(channel, client_ip=client_handle)
+        emulated_shell(channel, client_ip)
 
     except Exception as error:
         print(error)
@@ -127,7 +133,7 @@ def client_handle(client, addr, username, password):
 def honeypot(address, port, username, password):
     socks = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     socks.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    socks.bind(address, port)
+    socks.bind((address, port))
 
     socks.listen(100)
     print(f"SSH Server is listening on port {port}.")
@@ -140,4 +146,4 @@ def honeypot(address, port, username, password):
         except Exception as error:
             print(error)
 
-honeypot('127.0.0.1', 2223, 'username', 'password')
+honeypot('127.0.0.1', 2223, username=None, password=None)
